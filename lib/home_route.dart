@@ -1,7 +1,6 @@
 import 'package:admob_testapp/app_theme.dart';
 import 'package:flutter/material.dart';
-
-// TODO: Import google_mobile_ads.dart
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 class HomeRoute extends StatelessWidget {
   const HomeRoute({Key? key}) : super(key: key);
@@ -63,9 +62,7 @@ class HomeRoute extends StatelessWidget {
     );
   }
 
-  // TODO: Change return type to Future<InitializationStatus>
-  Future<void> _initGoogleMobileAds() {
-    // TODO: Initialize Google Mobile Ads SDK
-    return Future.value({});
+  Future<InitializationStatus> _initGoogleMobileAds() {
+    return MobileAds.instance.initialize();
   }
 }
