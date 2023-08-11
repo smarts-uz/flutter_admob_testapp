@@ -1,11 +1,9 @@
-// TODO: Import ad_helper.dart
-
-// TODO: Import google_mobile_ads.dart
-
 import 'package:admob_testapp/app_theme.dart';
 import 'package:admob_testapp/drawing.dart';
 import 'package:admob_testapp/drawing_painter.dart';
 import 'package:admob_testapp/quiz_manager.dart';
+import 'package:admob_testapp/ad_helper.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter/material.dart';
 
 class GameRoute extends StatefulWidget {
@@ -16,11 +14,9 @@ class GameRoute extends StatefulWidget {
 }
 
 class _GameRouteState extends State<GameRoute> implements QuizEventListener {
-  // TODO: Add _bannerAd
-
-  // TODO: Add _interstitialAd
-
-  // TODO: Add _rewardedAd
+  BannerAd? _bannerAd;
+  InterstitialAd? _interstitialAd;
+  RewardedAd? _rewardedAd;
 
   @override
   void initState() {
@@ -30,9 +26,24 @@ class _GameRouteState extends State<GameRoute> implements QuizEventListener {
       ..listener = this
       ..startGame();
 
-    // TODO: Load a banner ad
+    BannerAd(
+      adUnitId: AdHelper.bannerAdUnitId,
+      request: const AdRequest(),
+      size: AdSize.banner,
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          setState(() {
+            _bannerAd = ad as BannerAd;
+          });
+        },
+        onAdFailedToLoad: (ad, err) {
+          debugPrint('Failed to load a banner ad: ${err.message}');
+          ad.dispose();
+        },
+      ),
+    ).load();
 
-    // TODO: Load a rewarded ad
+    _loadRewardedAd();
   }
 
   @override
@@ -123,7 +134,15 @@ class _GameRouteState extends State<GameRoute> implements QuizEventListener {
                 ],
               ),
             ),
-            // TODO: Display a banner when ready
+            if (_bannerAd != null)
+              Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  width: _bannerAd!.size.width.toDouble(),
+                  height: _bannerAd!.size.height.toDouble(),
+                  child: AdWidget(ad: _bannerAd!),
+                ),
+              ),
           ],
         ),
       ),
@@ -146,8 +165,42 @@ class _GameRouteState extends State<GameRoute> implements QuizEventListener {
   }
 
   Widget? _buildFloatingActionButton() {
-    // TODO: Return a FloatingActionButton if a Rewarded Ad is available
-    return null;
+    return (!QuizManager.instance.isHintUsed && _rewardedAd != null)
+        ? FloatingActionButton.extended(
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) {
+                  return AlertDialog(
+                    title: const Text('Need a hint?'),
+                    content: const Text('Watch an Ad to get a hint!'),
+                    actions: [
+                      TextButton(
+                        child: Text('cancel'.toUpperCase()),
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                      ),
+                      TextButton(
+                        child: Text('ok'.toUpperCase()),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _rewardedAd?.show(
+                            onUserEarnedReward: (_, reward) {
+                              QuizManager.instance.useHint();
+                            },
+                          );
+                        },
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+            label: const Text('Hint'),
+            icon: const Icon(Icons.card_giftcard),
+          )
+        : null;
   }
 
   void _moveToHome() {
@@ -162,17 +215,60 @@ class _GameRouteState extends State<GameRoute> implements QuizEventListener {
     );
   }
 
-  // TODO: Implement _loadInterstitialAd()
+  void _loadInterstitialAd() {
+    InterstitialAd.load(
+      adUnitId: AdHelper.interstitialAdUnitId,
+      request: const AdRequest(),
+      adLoadCallback: InterstitialAdLoadCallback(
+        onAdLoaded: (ad) {
+          ad.fullScreenContentCallback = FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (ad) {
+              _moveToHome();
+            },
+          );
+          setState(() {
+            _interstitialAd = ad;
+          });
+        },
+        onAdFailedToLoad: (err) {
+          debugPrint('Failed to load an interstitial ad: ${err.message}');
+        },
+      ),
+    );
+  }
 
-  // TODO: Implement _loadRewardedAd()
+  void _loadRewardedAd() {
+    RewardedAd.load(
+      adUnitId: AdHelper.rewardedAdUnitId,
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (ad) {
+          ad.fullScreenContentCallback = FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (ad) {
+              setState(() {
+                ad.dispose();
+                _rewardedAd = null;
+              });
+              _loadRewardedAd();
+            },
+          );
+
+          setState(() {
+            _rewardedAd = ad;
+          });
+        },
+        onAdFailedToLoad: (err) {
+          debugPrint('Failed to load a rewarded ad: ${err.message}');
+        },
+      ),
+    );
+  }
 
   @override
   void dispose() {
-    // TODO: Dispose a BannerAd object
-
-    // TODO: Dispose an InterstitialAd object
-
-    // TODO: Dispose a RewardedAd object
+    _bannerAd?.dispose();
+    _interstitialAd?.dispose();
+    _rewardedAd?.dispose();
 
     QuizManager.instance.listener = null;
 
@@ -188,7 +284,9 @@ class _GameRouteState extends State<GameRoute> implements QuizEventListener {
   void onNewLevel(int level, Drawing drawing, String clue) {
     setState(() {});
 
-    // TODO: Load an Interstitial Ad
+    if (level >= 3 && _interstitialAd == null) {
+      _loadInterstitialAd();
+    }
   }
 
   @override
@@ -208,9 +306,11 @@ class _GameRouteState extends State<GameRoute> implements QuizEventListener {
             TextButton(
               child: Text('close'.toUpperCase()),
               onPressed: () {
-                // TODO: Display an Interstitial Ad
-
-                _moveToHome();
+                if (_interstitialAd != null) {
+                  _interstitialAd?.show();
+                } else {
+                  _moveToHome();
+                }
               },
             ),
           ],
